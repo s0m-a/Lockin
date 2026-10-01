@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String              @unique
+  username           String
+  passwordHash       String              @map("password_hash")
+  avatarUrl          String?             @map("avatar_url")
+  isVerified         Boolean             @default(false) @map("is_verified")
+  isActive           Boolean             @default(true) @map("is_active")
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  studentEmail       String?             @map("student_email")
+  major              String?             @map("major")
+  theme              String?             @default("vintage-garden") @map("theme")
+  exams              exams[]
+  goals              goals[]
+  habits             habits[]
+  notes              notes[]
+  refreshTokens      RefreshToken[]
+  tasks              tasks[]
+  timetable_events   timetable_events[]
+  verificationTokens VerificationToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  familyId  String   @default(dbgenerated("gen_random_uuid()")) @map("family_id") @db.Uuid
+  isRevoked Boolean  @default(false) @map("is_revoked")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_refresh_tokens_user_id")
+  @@index([tokenHash], map: "idx_refresh_tokens_token_hash")
+  @@map("refresh_tokens")
+}
+
+model VerificationToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_verification_tokens_user_id")
+  @@index([token], map: "idx_verification_tokens_token")
+  @@map("verification_tokens")
+}
+
+model exam_topics {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  exam_id    String   @db.Uuid
+  title      String
+  is_done    Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  exams      exams    @relation(fields: [exam_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([exam_id], map: "idx_exam_topics_exam_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model exams {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String         @db.Uuid
+  title        String
+  subject      String
+  exam_type    exam_type_enum @default(exam)
+  date         DateTime       @db.Timestamptz(6)
+  start_time   String
+  end_time     String
+  location     String?
+  seat_number  String?
+  weightage    Int?           @db.SmallInt
+  notes        String?
+  is_completed Boolean        @default(false)
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime       @default(now()) @db.Timestamptz(6)
+  exam_topics  exam_topics[]
+  users        User           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, date], map: "idx_exams_date")
+  @@index([user_id], map: "idx_exams_user_id")
+}
+
+model goal_milestones {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goal_id      String    @db.Uuid
+  title        String
+  is_done      Boolean   @default(false)
+  completed_at DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  goals        goals     @relation(fields: [goal_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([goal_id], map: "idx_milestones_goal_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model goals {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String            @db.Uuid
+  title           String
+  description     String?
+  category        category_enum     @default(other)
+  status          goal_status_enum  @default(active)
+  target_date     DateTime?         @db.Timestamptz(6)
+  progress        Int               @default(0) @db.SmallInt
+  completed_at    DateTime?         @db.Timestamptz(6)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  goal_milestones goal_milestones[]
+  users           User              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, status], map: "idx_goals_status")
+  @@index([user_id], map: "idx_goals_user_id")
+}
+
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model notes {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String        @db.Uuid
+  title      String
+  content    String        @default("")
+  category   category_enum @default(other)
+  tags       String[]      @default([])
+  is_pinned  Boolean       @default(false)
+  color      String?
+  created_at DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at DateTime      @default(now()) @db.Timestamptz(6)
+  users      User          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, is_pinned], map: "idx_notes_pinned")
+  @@index([user_id], map: "idx_notes_user_id")
+}
+
+model tasks {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String             @db.Uuid
+  title        String
+  description  String?
+  status       task_status_enum   @default(todo)
+  priority     task_priority_enum @default(medium)
+  due_date     DateTime?          @db.Timestamptz(6)
+  category     category_enum      @default(other)
+  tags         String[]           @default([])
+  completed_at DateTime?          @db.Timestamptz(6)
+  created_at   DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime           @default(now()) @db.Timestamptz(6)
+  users        User               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, due_date], map: "idx_tasks_due_date")
+  @@index([user_id, priority], map: "idx_tasks_priority")
+  @@index([user_id, status], map: "idx_tasks_status")
+  @@index([user_id], map: "idx_tasks_user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model timetable_events {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String        @db.Uuid
+  title        String
+  description  String?
+  day          Int           @db.SmallInt
+  start_time   String
+  end_time     String
+  location     String?
+  category     category_enum @default(other)
+  color        String?
+  is_recurring Boolean       @default(false)
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @db.Timestamptz(6)
+  users        User          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id, day], map: "idx_events_day")
+  @@index([user_id], map: "idx_events_user_id")
+}
+
+model habits {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String    @db.Uuid
+  title           String    @db.VarChar(255)
+  category        String    @default("Health") @db.VarChar(50)
+  target_days     Int       @default(7) @db.SmallInt
+  weekly_progress Boolean[] @default([false, false, false, false, false, false, false])
+  streak          Int       @default(0)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
+  users           User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_habits_user_id")
+}
+
+enum category_enum {
+  work
+  personal
+  study
+  health
+  social
+  other
+}
+
+enum exam_type_enum {
+  exam
+  midterm
+  quiz
+  assignment
+}
+
+enum goal_status_enum {
+  active
+  completed
+  abandoned
+}
+
+enum task_priority_enum {
+  low
+  medium
+  high
+}
+
+enum task_status_enum {
+  todo
+  in_progress
+  done
+}
